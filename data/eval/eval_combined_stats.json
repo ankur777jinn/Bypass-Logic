@@ -1,0 +1,11 @@
+{
+  "seed": 42,
+  "n_per_category": 100,
+  "total": 400,
+  "categories": {
+    "1_harmful_code": 100,
+    "2_not_harmful_code": 100,
+    "3_harmful_non_code": 100,
+    "4_not_harmful_non_code": 100
+  }
+}

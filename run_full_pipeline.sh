@@ -21,7 +21,7 @@ set -e
 # ==========================
 # PASTE YOUR HUGGINGFACE TOKEN HERE
 # ==========================
-HF_TOKEN="YOUR_HF_TOKEN_HERE"
+HF_TOKEN="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"
 
 echo "=========================================="
 echo "PHASE 0: Environment Setup"

@@ -29,7 +29,18 @@ import torch
 from datasets import load_dataset
 from peft import LoraConfig, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-from trl import SFTConfig, SFTTrainer
+
+# ---------------------------------------------------------------------------
+# Import SFTTrainer/SFTConfig with backward compatibility
+# ---------------------------------------------------------------------------
+try:
+    from trl import SFTConfig, SFTTrainer
+    _HAS_SFTCONFIG = True
+except ImportError:
+    from trl import SFTTrainer
+    _HAS_SFTCONFIG = False
+
+import inspect
 
 
 def parse_args():
@@ -76,7 +87,7 @@ def main():
         args.model_name,
         quantization_config=bnb_config,
         device_map="auto",
-        dtype=torch.bfloat16,
+        torch_dtype=torch.bfloat16,
     )
     model = prepare_model_for_kbit_training(model)
     model.config.use_cache = False
@@ -157,7 +168,11 @@ def main():
                 "Base mode: need 'text', 'messages', or 'prompt'+'completion'."
             )
 
-    sft_config = SFTConfig(
+    # -----------------------------------------------------------------------
+    # Build SFTConfig/SFTTrainer — compatible with trl 0.8.x through 1.10.x
+    # -----------------------------------------------------------------------
+    # Common training arguments
+    training_kwargs = dict(
         output_dir=args.output_dir,
         num_train_epochs=args.epochs,
         max_steps=args.max_steps,
@@ -170,7 +185,6 @@ def main():
         logging_steps=10,
         save_strategy="epoch",
         save_total_limit=2,
-        max_length=args.max_seq_len,
         dataset_text_field="text",
         packing=False,
         report_to="none",
@@ -179,13 +193,39 @@ def main():
         gradient_checkpointing_kwargs={"use_reentrant": False},
     )
 
-    trainer = SFTTrainer(
+    # Handle max_length vs max_seq_length across trl versions
+    if _HAS_SFTCONFIG:
+        sig = inspect.signature(SFTConfig)
+        if "max_length" in sig.parameters:
+            training_kwargs["max_length"] = args.max_seq_len
+        elif "max_seq_length" in sig.parameters:
+            training_kwargs["max_seq_length"] = args.max_seq_len
+        sft_config = SFTConfig(**training_kwargs)
+    else:
+        # Very old trl — pass max_seq_length directly to SFTTrainer
+        training_kwargs["max_seq_length"] = args.max_seq_len
+        sft_config = training_kwargs  # SFTTrainer will accept a dict in old versions
+
+    # Build trainer with version-compatible arguments
+    trainer_kwargs = dict(
         model=model,
-        processing_class=tokenizer,
         train_dataset=dataset,
         peft_config=lora_config,
-        args=sft_config,
     )
+
+    # 'processing_class' replaced 'tokenizer' in newer trl/transformers
+    sft_sig = inspect.signature(SFTTrainer.__init__)
+    if "processing_class" in sft_sig.parameters:
+        trainer_kwargs["processing_class"] = tokenizer
+    else:
+        trainer_kwargs["tokenizer"] = tokenizer
+
+    if _HAS_SFTCONFIG:
+        trainer_kwargs["args"] = sft_config
+    else:
+        trainer_kwargs.update(sft_config)
+
+    trainer = SFTTrainer(**trainer_kwargs)
 
     trainer.train()
 

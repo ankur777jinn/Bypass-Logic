@@ -52,18 +52,18 @@ conda activate safety
 
 # Install packages (pip will skip already-installed ones)
 log "Installing packages..."
-pip install -q torch==2.8.0 --index-url https://download.pytorch.org/whl/cu121
+pip install -q torch --index-url https://download.pytorch.org/whl/cu121
 pip install -q \
-    transformers==5.7.0 \
-    peft==0.19.1 \
+    transformers \
+    peft \
     trl \
     datasets \
     accelerate \
-    bitsandbytes==0.49.2 \
+    bitsandbytes \
     scipy \
     tqdm \
     numpy \
-    safetensors==0.8.0rc0 \
+    safetensors \
     matplotlib
 
 # HuggingFace login

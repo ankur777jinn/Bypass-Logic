@@ -56,7 +56,7 @@ pip install -q torch --index-url https://download.pytorch.org/whl/cu121
 pip install -q \
     transformers \
     peft \
-    trl==0.9.6 \
+    trl==0.20.1 \
     datasets \
     accelerate \
     bitsandbytes \

@@ -76,6 +76,9 @@ fi
 # Create output directories
 mkdir -p runs results artifacts results/subspace_comparison data
 
+# Force single GPU — model fits easily in 1 GPU, multi-GPU causes device split errors
+export CUDA_VISIBLE_DEVICES=0
+
 log "Environment ready. Python: $(python --version), torch: $(python -c 'import torch; print(torch.__version__)')"
 log "CUDA available: $(python -c 'import torch; print(torch.cuda.is_available())')"
 log "GPU: $(python -c 'import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "NONE")')"

@@ -27,7 +27,11 @@ echo "=========================================="
 echo "PHASE 0: Environment Setup"
 echo "=========================================="
 
-conda create -n safety python=3.11 -y
+# Initialize conda for non-interactive shell
+source ~/miniconda3/etc/profile.d/conda.sh
+
+# Create env if it doesn't exist, then activate
+conda create -n safety python=3.11 -y 2>/dev/null || true
 conda activate safety
 
 pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cu121

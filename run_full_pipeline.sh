@@ -9,9 +9,13 @@
 # =============================================================================
 
 # ==========================
-# CONFIGURATION
+# HuggingFace token: set via environment variable BEFORE running this script
+# Example: export HF_TOKEN="hf_your_token_here"
 # ==========================
-HF_TOKEN="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"
+if [ -z "${HF_TOKEN:-}" ]; then
+    echo "ERROR: HF_TOKEN not set. Run: export HF_TOKEN=\"hf_your_token\" before running this script."
+    exit 1
+fi
 
 # Stop on errors, but handle them gracefully per-phase
 set -euo pipefail

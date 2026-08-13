@@ -66,8 +66,12 @@ pip install -q \
     safetensors \
     matplotlib
 
-# HuggingFace login
-huggingface-cli login --token "$HF_TOKEN"
+# HuggingFace login (try new CLI first, fall back to old)
+if command -v hf &> /dev/null; then
+    hf auth login --token "$HF_TOKEN"
+else
+    huggingface-cli login --token "$HF_TOKEN"
+fi
 
 # Create output directories
 mkdir -p runs results artifacts results/subspace_comparison data

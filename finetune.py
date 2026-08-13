@@ -29,18 +29,7 @@ import torch
 from datasets import load_dataset
 from peft import LoraConfig, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-
-# ---------------------------------------------------------------------------
-# Import SFTTrainer/SFTConfig with backward compatibility
-# ---------------------------------------------------------------------------
-try:
-    from trl import SFTConfig, SFTTrainer
-    _HAS_SFTCONFIG = True
-except ImportError:
-    from trl import SFTTrainer
-    _HAS_SFTCONFIG = False
-
-import inspect
+from trl import SFTConfig, SFTTrainer
 
 
 def parse_args():
@@ -87,7 +76,7 @@ def main():
         args.model_name,
         quantization_config=bnb_config,
         device_map="auto",
-        dtype=torch.bfloat16,
+        torch_dtype=torch.bfloat16,
     )
     model = prepare_model_for_kbit_training(model)
     model.config.use_cache = False
@@ -105,17 +94,10 @@ def main():
     )
 
     # Load dataset and normalize to a 'text' column.
-    # Supported input row shapes:
-    #   A. {"messages": [{"role": "user", ...}, {"role": "assistant", ...}]}
-    #   B. {"text": "..."}
-    #   C. {"prompt": "...", "completion": "..."}
-    # The files in data/train/ use shape A, so that is the main path here.
     dataset = load_dataset("json", data_files=args.dataset_path, split="train")
     cols = dataset.column_names
 
     if args.is_instruct:
-        # Instruct: apply the model's chat template, train on the full
-        # rendered conversation (no completion-only masking — matches EM paper).
         if "messages" in cols:
             def format_fn(ex):
                 text = tokenizer.apply_chat_template(
@@ -124,7 +106,6 @@ def main():
                 return {"text": text}
             dataset = dataset.map(format_fn, remove_columns=cols)
         elif "prompt" in cols and "completion" in cols:
-            # Fallback: wrap into messages
             def format_fn(ex):
                 msgs = [
                     {"role": "user", "content": ex["prompt"]},
@@ -140,12 +121,8 @@ def main():
                 "Instruct mode: need either 'messages' or 'prompt'+'completion'."
             )
     else:
-        # Base model: no chat template exists. Convert messages to a simple
-        # "User: ...\n\nAssistant: ..." format so the base model learns the
-        # input→output mapping. At eval time, prompt with "User: X\n\nAssistant:"
-        # to match (see generate_responses_batch.py --base_template).
         if "text" in cols:
-            pass  # already in the right shape
+            pass
         elif "messages" in cols:
             def format_fn(ex):
                 lines = []
@@ -169,10 +146,9 @@ def main():
             )
 
     # -----------------------------------------------------------------------
-    # Build SFTConfig/SFTTrainer — compatible with trl 0.8.x through 1.10.x
+    # SFTConfig + SFTTrainer (trl 0.12.x / transformers 4.46.x API)
     # -----------------------------------------------------------------------
-    # Common training arguments
-    training_kwargs = dict(
+    sft_config = SFTConfig(
         output_dir=args.output_dir,
         num_train_epochs=args.epochs,
         max_steps=args.max_steps,
@@ -185,6 +161,7 @@ def main():
         logging_steps=10,
         save_strategy="epoch",
         save_total_limit=2,
+        max_seq_length=args.max_seq_len,
         dataset_text_field="text",
         packing=False,
         report_to="none",
@@ -193,36 +170,13 @@ def main():
         gradient_checkpointing_kwargs={"use_reentrant": False},
     )
 
-    # Handle max_length vs max_seq_length across trl versions
-    if _HAS_SFTCONFIG:
-        sig = inspect.signature(SFTConfig)
-        if "max_length" in sig.parameters:
-            training_kwargs["max_length"] = args.max_seq_len
-        elif "max_seq_length" in sig.parameters:
-            training_kwargs["max_seq_length"] = args.max_seq_len
-        sft_config = SFTConfig(**training_kwargs)
-    else:
-        # Very old trl — pass max_seq_length directly to SFTTrainer
-        training_kwargs["max_seq_length"] = args.max_seq_len
-        sft_config = training_kwargs  # SFTTrainer will accept a dict in old versions
-
-    # Build trainer — try processing_class (new API) first, fall back to tokenizer
-    trainer_kwargs = dict(
+    trainer = SFTTrainer(
         model=model,
+        tokenizer=tokenizer,
         train_dataset=dataset,
         peft_config=lora_config,
+        args=sft_config,
     )
-
-    if _HAS_SFTCONFIG:
-        trainer_kwargs["args"] = sft_config
-    else:
-        trainer_kwargs.update(sft_config)
-
-    # Try new API first, then old API
-    try:
-        trainer = SFTTrainer(processing_class=tokenizer, **trainer_kwargs)
-    except TypeError:
-        trainer = SFTTrainer(tokenizer=tokenizer, **trainer_kwargs)
 
     trainer.train()
 

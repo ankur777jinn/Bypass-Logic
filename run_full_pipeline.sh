@@ -54,9 +54,9 @@ conda activate safety
 log "Installing packages..."
 pip install -q torch --index-url https://download.pytorch.org/whl/cu121
 pip install -q \
-    transformers \
-    peft \
-    trl \
+    transformers==4.46.3 \
+    peft==0.13.2 \
+    trl==0.12.2 \
     datasets \
     accelerate \
     bitsandbytes \

@@ -87,7 +87,7 @@ def main():
         args.model_name,
         quantization_config=bnb_config,
         device_map="auto",
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
     )
     model = prepare_model_for_kbit_training(model)
     model.config.use_cache = False
@@ -206,26 +206,23 @@ def main():
         training_kwargs["max_seq_length"] = args.max_seq_len
         sft_config = training_kwargs  # SFTTrainer will accept a dict in old versions
 
-    # Build trainer with version-compatible arguments
+    # Build trainer — try processing_class (new API) first, fall back to tokenizer
     trainer_kwargs = dict(
         model=model,
         train_dataset=dataset,
         peft_config=lora_config,
     )
 
-    # 'processing_class' replaced 'tokenizer' in newer trl/transformers
-    sft_sig = inspect.signature(SFTTrainer.__init__)
-    if "processing_class" in sft_sig.parameters:
-        trainer_kwargs["processing_class"] = tokenizer
-    else:
-        trainer_kwargs["tokenizer"] = tokenizer
-
     if _HAS_SFTCONFIG:
         trainer_kwargs["args"] = sft_config
     else:
         trainer_kwargs.update(sft_config)
 
-    trainer = SFTTrainer(**trainer_kwargs)
+    # Try new API first, then old API
+    try:
+        trainer = SFTTrainer(processing_class=tokenizer, **trainer_kwargs)
+    except TypeError:
+        trainer = SFTTrainer(tokenizer=tokenizer, **trainer_kwargs)
 
     trainer.train()
 

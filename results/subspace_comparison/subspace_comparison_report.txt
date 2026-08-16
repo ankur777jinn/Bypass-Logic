@@ -1,0 +1,158 @@
+========================================================================
+  SUBSPACE SIMILARITY ANALYSIS REPORT
+  Generated: 2026-08-14 11:56:17
+========================================================================
+
+1. METHODOLOGY
+------------------------------------------------------------------------
+We compare the bypass subspaces V_bypass extracted from two model
+variants — an Instruct-FT model (aligned via RLHF, then fine-tuned on
+insecure code) and a Base-FT model (pretrained only, then fine-tuned on
+identical insecure code) — using standard subspace comparison methods
+from Grassmannian geometry.
+
+Each V_bypass is a set of k orthonormal vectors in R^D (the model's
+hidden dimension) obtained via PCA/SVD on bypass-regime activations at
+the safety-critical layer l*. If H3 holds (bypass logic is an alignment
+artifact), the Instruct V_bypass should encode a structured, coherent
+bypass direction, while the Base V_bypass should be diffuse and
+geometrically unrelated.
+
+Metrics computed:
+  (a) Principal angles θ_1 ... θ_k (Björck & Golub, 1973):
+      Computed as arccos of singular values of V1 @ V2.T.
+      θ_i = 0° means perfect alignment on that axis; 90° = orthogonal.
+
+  (b) Grassmann geodesic distance d_g = ||θ||_2:
+      Length of the shortest path between the two subspaces on the
+      Grassmannian manifold G(k, D).
+
+  (c) Chordal (Fubini–Study) distance d_c = sqrt(Σ sin²θ_i):
+      Embedding-based distance; computationally stable, bounded [0, √k].
+
+  (d) Projection metric d_p = ||P1 - P2||_F / √2:
+      Difference between orthogonal projectors; bounded [0, 1] when
+      k1 = k2.
+
+  (e) Normalized overlap = (1/k) ||V1 V2^T||_F²:
+      Fraction of shared variance; 0 = orthogonal, 1 = identical.
+
+Statistical significance is assessed via a permutation test: we draw
+N=1000 uniformly random k-dimensional subspaces in R^D and compute
+their overlap with V_instruct. The actual overlap is then compared
+against this null distribution.
+
+
+2. SUBSPACE SPECIFICATIONS
+------------------------------------------------------------------------
+  Instruct V_bypass:  shape = (32, 4096)
+    l* = 23, tau = 0.7, contrastive = False
+  Base V_bypass:      shape = (32, 4096)
+    l* = 11, tau = 0.85, contrastive = True
+
+  NOTE: l* differs between models (23 vs 11). The V_bypass vectors still live in the
+  same R^4096 space, so geometric comparison is valid,
+  but the subspaces originate from different transformer layers.
+
+3. PRINCIPAL ANGLES
+------------------------------------------------------------------------
+  Number of angles:   32
+  Mean angle:         70.73°
+  Median angle:       69.14°
+  Std deviation:      11.13°
+  Min angle:          51.60°
+  Max angle:          89.55°
+  Angles < 30°:       0/32
+  Angles 30°–60°:     7/32
+  Angles > 60°:       25/32
+  Angles > 80°:       8/32
+
+  All 32 angles (sorted, degrees):
+    θ_01 = 51.60°
+    θ_02 = 53.22°
+    θ_03 = 55.05°
+    θ_04 = 56.96°
+    θ_05 = 58.12°
+    θ_06 = 59.20°
+    θ_07 = 59.60°
+    θ_08 = 60.25°
+    θ_09 = 62.59°
+    θ_10 = 63.31°
+    θ_11 = 63.65°
+    θ_12 = 65.04°
+    θ_13 = 65.68°
+    θ_14 = 66.09°
+    θ_15 = 67.99°
+    θ_16 = 69.00°
+    θ_17 = 69.28°
+    θ_18 = 72.43°
+    θ_19 = 73.39°
+    θ_20 = 74.97°
+    θ_21 = 75.96°
+    θ_22 = 77.10°
+    θ_23 = 78.36°
+    θ_24 = 79.80°
+    θ_25 = 81.97°
+    θ_26 = 82.24°
+    θ_27 = 83.59°
+    θ_28 = 84.24°
+    θ_29 = 87.27°
+    θ_30 = 87.32°
+    θ_31 = 88.56°
+    θ_32 = 89.55°
+
+4. DISTANCE METRICS
+------------------------------------------------------------------------
+  Grassmann geodesic distance:  7.0692
+    (max possible for k=32: 8.8858)
+  Chordal distance:             5.2520
+    (max possible for k=32: 5.6569)
+  Projection metric:            5.2518
+    (range: 0 = identical, 1 = orthogonal)
+  Normalized overlap:            0.138002
+    (range: 0 = orthogonal, 1 = identical)
+
+5. PERMUTATION TEST
+------------------------------------------------------------------------
+  N random subspaces drawn:     1000
+  Null mean overlap:            0.007827
+  Null std overlap:             0.000334
+  Null [5th, 95th] percentile:  [0.007287, 0.008423]
+  Actual overlap:               0.138002
+  z-score (actual vs null):      389.71
+  p-value (overlap ≥ actual):    0.0000
+  p-value (overlap ≤ actual):    1.0000
+
+  INTERPRETATION: The actual overlap IS significantly greater than
+  random chance (p ≤ 0.05). The two subspaces share non-trivial structure.
+  → This CHALLENGES H3: the bypass subspaces have shared geometry.
+
+6. EIGENVALUE DIAGNOSTICS
+------------------------------------------------------------------------
+  Instruct-FT:
+    Eigenvalue concentration ratio: 5.1142804107048025
+    Variance explained (top-k):     0.3114075350755444
+    Bypass-onset samples used:      231
+    Total tokens collected:         35159
+  Base-FT:
+    Eigenvalue concentration ratio: 3.8858075309315705
+    Variance explained (top-k):     0.3564015656811747
+    Bypass-onset samples used:      494
+    Total tokens collected:         50139
+
+  Instruct/Base eigenvalue concentration ratio: 1.32x
+  (Under H3, this should be >> 1, indicating that the
+  Instruct model's bypass subspace is far more structured)
+
+7. VERDICT
+------------------------------------------------------------------------
+  WEAK OVERLAP: Some shared directions exist (statistically significant) but the overall geometry is largely distinct. H3 is partially supported but not as cleanly as the orthogonal case.
+
+8. FIGURES
+------------------------------------------------------------------------
+  → fig1_cosine_heatmap.png
+  → fig2_principal_angles.png
+  → fig3_eigenvalue_spectrum.png
+  → fig4_permutation_test.png
+
+========================================================================
